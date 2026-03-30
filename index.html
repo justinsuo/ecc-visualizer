@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding Elliptic Curve Cryptography</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #08080e;
+  --panel: #0e0e18;
+  --card: #131320;
+  --border: #1e1e35;
+  --text: #c8c8d8;
+  --text-dim: #6a6a8a;
+  --accent: #6c9fff;
+  --accent-glow: #6c9fff44;
+  --pink: #ff6b9d;
+  --green: #4ade80;
+  --gold: #fbbf24;
+  --purple: #a78bfa;
+  --orange: #fb923c;
+  --cyan: #22d3ee;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 15px; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ============ LAYOUT ============ */
+.app {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  height: 100vh;
+}
+
+.canvas-area {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+canvas#main {
+  width: 100%; height: 100%;
+  cursor: crosshair;
+}
+
+.canvas-overlay {
+  position: absolute; top: 20px; left: 20px;
+  pointer-events: none;
+}
+.canvas-overlay .equation {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; color: var(--accent);
+  opacity: 0.7;
+  text-shadow: 0 0 20px var(--accent-glow);
+}
+.canvas-hint {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  font-size: 13px; color: var(--text-dim);
+  background: #0008; padding: 8px 16px; border-radius: 20px;
+  pointer-events: none; transition: opacity 0.4s;
+}
+
+.hover-tooltip {
+  position: absolute; pointer-events: none;
+  background: #181828ee; border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--accent); white-space: nowrap;
+  display: none; z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+/* ============ RIGHT PANEL ============ */
+.panel {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 20px 24px 0;
+  flex-shrink: 0;
+}
+.panel-header h1 {
+  font-size: 13px; font-weight: 600;
+  color: var(--text-dim); text-transform: uppercase;
+  letter-spacing: 2px; margin-bottom: 4px;
+}
+
+/* Chapter nav */
+.chapter-nav {
+  display: flex; gap: 3px; padding: 12px 24px;
+  flex-shrink: 0; overflow-x: auto;
+}
+.chapter-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  cursor: pointer; transition: all 0.25s; flex-shrink: 0;
+}
+.chapter-dot:hover { border-color: var(--accent); color: var(--text); }
+.chapter-dot.active { background: var(--accent); border-color: var(--accent); color: #000; }
+.chapter-dot.visited { border-color: var(--accent); color: var(--accent); }
+
+/* Scrollable content */
+.panel-body {
+  flex: 1; overflow-y: auto; padding: 0 24px 40px;
+  scroll-behavior: smooth;
+}
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Chapter content */
+.chapter { display: none; animation: fadeUp 0.4s ease; }
+.chapter.active { display: block; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.chapter h2 {
+  font-size: 22px; font-weight: 700; margin-bottom: 6px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.chapter .ch-subtitle {
+  font-size: 13px; color: var(--text-dim); margin-bottom: 20px;
+}
+
+.prose {
+  font-size: 14px; line-height: 1.75; color: #a0a0b8;
+  margin-bottom: 16px;
+}
+.prose b, .prose strong { color: var(--text); font-weight: 500; }
+.prose .hl { color: var(--accent); font-weight: 500; }
+.prose .hl-pink { color: var(--pink); font-weight: 500; }
+.prose .hl-green { color: var(--green); font-weight: 500; }
+.prose .hl-gold { color: var(--gold); font-weight: 500; }
+
+.math-block {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px; color: var(--accent);
+  background: #0c0c1a; border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 18px; margin: 14px 0;
+  text-align: center; line-height: 1.8;
+}
+
+.callout {
+  background: #111125; border-left: 3px solid var(--accent);
+  padding: 12px 16px; border-radius: 0 8px 8px 0;
+  margin: 16px 0; font-size: 13px; color: #9090aa; line-height: 1.6;
+}
+.callout.warn { border-color: var(--gold); background: #18150e; }
+.callout.key { border-color: var(--pink); background: #180e14; }
+
+/* Interactive controls */
+.control-group {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; margin: 16px 0;
+}
+.control-group .cg-title {
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;
+}
+
+.slider-row {
+  display: flex; align-items: center; gap: 10px; margin: 8px 0;
+}
+.slider-row label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; color: var(--text-dim); min-width: 20px;
+}
+.slider-row input[type=range] {
+  flex: 1; -webkit-appearance: none; background: var(--border);
+  height: 4px; border-radius: 2px; outline: none;
+}
+.slider-row input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--accent);
+  cursor: grab; border: 2px solid #fff3;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.slider-row .s-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; color: var(--accent); min-width: 40px; text-align: right;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--accent); padding: 10px 18px; border-radius: 8px;
+  cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px;
+  font-weight: 500; transition: all 0.2s; margin: 4px 4px 4px 0;
+}
+.btn:hover { background: #1a1a30; border-color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); }
+.btn:active { transform: scale(0.97); }
+.btn.primary { background: var(--accent); color: #000; border-color: var(--accent); }
+.btn.primary:hover { background: #8bb4ff; }
+
+.point-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; margin: 6px 0;
+  transition: all 0.3s;
+}
+.point-card .dot {
+  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+}
+.point-card .pt-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--text-dim); min-width: 28px;
+}
+.point-card .pt-coord {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; color: var(--accent); flex: 1;
+}
+
+/* Step-by-step blocks */
+.step-list { margin: 12px 0; }
+.step-item {
+  display: flex; gap: 12px; padding: 10px 0;
+  border-bottom: 1px solid #ffffff06;
+  opacity: 0.4; transition: all 0.5s;
+}
+.step-item.active, .step-item.done { opacity: 1; }
+.step-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+  flex-shrink: 0; transition: all 0.3s;
+}
+.step-item.active .step-num { border-color: var(--accent); color: var(--accent); }
+.step-item.done .step-num { background: var(--accent); border-color: var(--accent); color: #000; }
+.step-text { font-size: 13px; color: #9090aa; line-height: 1.5; padding-top: 2px; }
+.step-item.active .step-text { color: var(--text); }
+
+/* Nav buttons */
+.nav-row {
+  display: flex; justify-content: space-between; margin-top: 30px;
+  padding-top: 16px; border-top: 1px solid var(--border);
+}
+
+/* ECDH visual */
+.ecdh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.party-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; transition: all 0.3s;
+}
+.party-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.party-card.alice { border-color: #ff6b9d33; }
+.party-card.alice h3 { color: var(--pink); }
+.party-card.bob { border-color: #4ade8033; }
+.party-card.bob h3 { color: var(--green); }
+.party-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--text-dim); margin: 4px 0;
+  line-height: 1.5;
+}
+.party-val b { color: var(--accent); font-weight: 500; }
+
+.shared-card {
+  background: #111120; border: 2px solid var(--gold);
+  border-radius: 10px; padding: 14px; text-align: center;
+  margin: 10px 0; box-shadow: 0 0 20px #fbbf2411;
+}
+.shared-card .sc-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; }
+.shared-card .sc-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px; color: var(--gold); margin-top: 6px;
+}
+
+/* Finite field mini canvas */
+#ff-canvas {
+  width: 100%; aspect-ratio: 1; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 10px;
+  margin: 12px 0;
+}
+
+/* Animations */
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.pulsing { animation: pulse 1.5s infinite; }
+
+/* Progress bar at very top */
+.progress-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--border); z-index: 100;
+}
+.progress-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent), var(--purple));
+  transition: width 0.5s ease; border-radius: 0 2px 2px 0;
+}
+</style>
+</head>
+<body>
+
+<div class="progress-bar"><div class="progress-fill" id="progress" style="width:12.5%"></div></div>
+
+<div class="app">
+  <!-- LEFT: Canvas -->
+  <div class="canvas-area">
+    <canvas id="main"></canvas>
+    <div class="canvas-overlay">
+      <div class="equation" id="eq-display">y&sup2; = x&sup3; - x + 1</div>
+    </div>
+    <div class="canvas-hint" id="canvas-hint">Click on the curve to place a point</div>
+    <div class="hover-tooltip" id="tooltip"></div>
+  </div>
+
+  <!-- RIGHT: Panel -->
+  <div class="panel">
+    <div class="panel-header">
+      <h1>Elliptic Curve Cryptography</h1>
+    </div>
+    <div class="chapter-nav" id="chapter-nav"></div>
+    <div class="panel-body" id="panel-body"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  CHAPTERS DATA
+// ═══════════════════════════════════════
+const chapters = [
+  {
+    title: "The Curve",
+    subtitle: "What even is an elliptic curve?",
+    hint: "Drag the sliders to reshape the curve",
+    setup: () => { state.mode = 'explore'; clearAllPoints(); },
+    html: () => `
+      <div class="prose">
+        This is an <strong>elliptic curve</strong>. Despite the name, it has nothing to do with ellipses.
+        It's the set of all points (x, y) that satisfy:
+      </div>
+      <div class="math-block">y&sup2; = x&sup3; + ax + b</div>
+      <div class="prose">
+        The curve is <strong>symmetric about the x-axis</strong> &mdash; for every point (x, y) on the curve,
+        (x, -y) is also on it. This symmetry is crucial for the math that makes cryptography work.
+      </div>
+      <div class="control-group">
+        <div class="cg-title">Shape the curve</div>
+        <div class="slider-row">
+          <label>a</label>
+          <input type="range" id="sl-a" min="-5" max="5" step="0.1" value="${state.a}" oninput="setA(this.value)">
+          <span class="s-val" id="v-a">${state.a.toFixed(1)}</span>
+        </div>
+        <div class="slider-row">
+          <label>b</label>
+          <input type="range" id="sl-b" min="-5" max="5" step="0.1" value="${state.b}" oninput="setB(this.value)">
+          <span class="s-val" id="v-b">${state.b.toFixed(1)}</span>
+        </div>
+      </div>
+      <div class="prose">
+        For the curve to be useful in cryptography, it must be <strong>non-singular</strong> &mdash;
+        no cusps or self-intersections. That means:
+      </div>
+      <div class="math-block">4a&sup3; + 27b&sup2; &ne; 0</div>
+      <div class="callout" id="disc-box">
+        Discriminant &Delta; = <span id="disc-val">${(4*state.a**3 + 27*state.b**2).toFixed(2)}</span>
+        &mdash; <span id="disc-status">Curve is non-singular &#10003;</span>
+      </div>
+      <div class="prose">
+        Try setting <span class="hl">a = 0, b = 0</span>. See how the curve gets a sharp cusp at the origin?
+        That's a singular curve &mdash; no good for crypto.
+      </div>
+      <div class="callout key">
+        <strong>Key idea:</strong> An elliptic curve plus a special "point at infinity" forms a <strong>mathematical group</strong>.
+        That means we can define an operation (addition) on its points that follows certain rules.
+        This is the foundation of everything that follows.
+      </div>
+    `
+  },
+  {
+    title: "Point Addition",
+    subtitle: "How do you add two points on a curve?",
+    hint: "Click on the curve to place P, then Q &mdash; watch the addition",
+    setup: () => { state.mode = 'add'; clearAllPoints(); },
+    html: () => `
+      <div class="prose">
+        Here's the magic: we can <strong>"add" two points</strong> on an elliptic curve to get a third point, also on the curve.
+      </div>
+      <div class="step-list" id="add-steps">
+        <div class="step-item ${state.P ? 'done' : 'active'}" id="add-s1">
+          <div class="step-num">1</div>
+          <div class="step-text">Click on the curve to place point <span class="hl-pink">P</span></div>
+        </div>
+        <div class="step-item ${state.P && !state.Q ? 'active' : state.Q ? 'done' : ''}" id="add-s2">
+          <div class="step-num">2</div>
+          <div class="step-text">Click again to place point <span class="hl-green">Q</span></div>
+        </div>
+        <div class="step-item ${state.R ? 'done' : ''}" id="add-s3">
+          <div class="step-num">3</div>
+          <div class="step-text">A line through P and Q hits the curve at a third point. <strong>Reflect it</strong> over the x-axis to get <span class="hl-gold">R = P + Q</span></div>
+        </div>
+      </div>
+      <div id="point-cards"></div>
+      <div class="prose" style="margin-top:16px">
+        Why does this work? The line through two curve points <em>always</em> intersects the curve at exactly one more point (counting multiplicity and the point at infinity).
+        Reflecting makes the operation form a proper <strong>abelian group</strong>.
+      </div>
+      <div class="callout">
+        <strong>Try it:</strong> Place P and Q at different spots and see how R moves. Notice that R is always on the curve, no matter where you place P and Q.
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn" onclick="clearAllPoints(); draw();">Clear &amp; try again</button>
+      </div>
+    `
+  },
+  {
+    title: "Point Doubling",
+    subtitle: "What happens when you add a point to itself?",
+    hint: "Click on the curve to place P &mdash; see 2P computed",
+    setup: () => { state.mode = 'double'; clearAllPoints(); },
+    html: () => `
+      <div class="prose">
+        What if P = Q? We can't draw a line through one point.
+        Instead, we use the <strong>tangent line</strong> at P.
+      </div>
+      <div class="step-list" id="dbl-steps">
+        <div class="step-item ${state.P ? 'done' : 'active'}" id="dbl-s1">
+          <div class="step-num">1</div>
+          <div class="step-text">Click on the curve to place <span class="hl-pink">P</span></div>
+        </div>
+        <div class="step-item ${state.R ? 'done' : ''}" id="dbl-s2">
+          <div class="step-num">2</div>
+          <div class="step-text">The <strong>tangent line</strong> at P intersects the curve at another point. Reflect it to get <span class="hl-gold">R = 2P</span></div>
+        </div>
+      </div>
+      <div id="point-cards"></div>
+      <div class="math-block">
+        slope m = (3x&sup2; + a) / 2y
+      </div>
+      <div class="prose">
+        Point doubling is just a special case of addition. This means we can compute <strong>2P, 3P, 4P...</strong>
+        by repeatedly adding P to itself. This is called <strong>scalar multiplication</strong>.
+      </div>
+      <div class="callout key">
+        <strong>Key idea:</strong> Point doubling is extremely efficient. We can compute
+        <strong>nP</strong> in only ~log(n) steps using "double-and-add", similar to fast exponentiation.
+        Computing 1,000,000P takes about 20 doublings, not a million additions.
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn" onclick="clearAllPoints(); draw();">Clear &amp; try again</button>
+      </div>
+    `
+  },
+  {
+    title: "Scalar Multiplication",
+    subtitle: "The engine behind ECC",
+    hint: "Drag the n slider to see the path of repeated addition",
+    setup: () => {
+      state.mode = 'scalar';
+      clearAllPoints();
+      autoPickBase();
+    },
+    html: () => `
+      <div class="prose">
+        <strong>Scalar multiplication</strong> means computing nP = P + P + ... + P (n times).
+        Watch how the point bounces around the curve:
+      </div>
+      <div class="control-group">
+        <div class="cg-title">Scalar n &times; P</div>
+        <div class="slider-row">
+          <label>n</label>
+          <input type="range" id="sl-n" min="1" max="30" step="1" value="${state.scalarN}" oninput="setScalarN(this.value)">
+          <span class="s-val" id="v-n">${state.scalarN}</span>
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <button class="btn primary" onclick="animateScalar()">&#9654; Animate</button>
+        <button class="btn" onclick="autoPickBase(); setScalarN(state.scalarN);">New base point</button>
+      </div>
+      <div id="scalar-path" style="max-height:200px;overflow-y:auto"></div>
+      <div class="prose" style="margin-top:16px">
+        Notice how the points seem to <strong>jump unpredictably</strong> around the curve.
+        Even though the rule is deterministic, there's no visual shortcut to predict where nP lands
+        without doing all the intermediate steps.
+      </div>
+      <div class="callout key">
+        <strong>This is the trapdoor.</strong> Given P and n, computing nP is fast (log n steps).
+        But given P and nP, finding n is <em>computationally infeasible</em>. This is the
+        <strong>Elliptic Curve Discrete Logarithm Problem (ECDLP)</strong> &mdash; the hard problem that
+        makes ECC secure.
+      </div>
+    `
+  },
+  {
+    title: "The Trapdoor",
+    subtitle: "Why ECC is hard to break",
+    hint: "Try to guess which n produces the gold point",
+    setup: () => {
+      state.mode = 'trapdoor';
+      clearAllPoints();
+      setupTrapdoor();
+    },
+    html: () => `
+      <div class="prose">
+        Let's make this concrete. I've picked a secret number <strong>n</strong> and computed <span class="hl-gold">Q = nP</span>.
+        You can see both <span class="hl-pink">P</span> and <span class="hl-gold">Q</span> on the curve.
+      </div>
+      <div class="prose">
+        <strong>Your challenge:</strong> Can you figure out what n is?
+      </div>
+      <div class="control-group">
+        <div class="cg-title">Your guess</div>
+        <div class="slider-row">
+          <label>n</label>
+          <input type="range" id="sl-guess" min="1" max="30" step="1" value="1" oninput="updateGuess(this.value)">
+          <span class="s-val" id="v-guess">1</span>
+        </div>
+        <div id="guess-result" style="font-size:13px;margin-top:8px;min-height:20px"></div>
+      </div>
+      <div id="point-cards"></div>
+      <div class="prose">
+        With small numbers on a real-valued curve, you can brute-force it. But in real ECC:
+      </div>
+      <div class="callout warn">
+        <strong>Real-world scale:</strong> The secret n is a <strong>256-bit number</strong> (about 10<sup>77</sup> possibilities).
+        Even checking a trillion guesses per second, it would take longer than the age of the universe &times; 10<sup>48</sup>.
+        There is no known shortcut.
+      </div>
+      <div class="prose">
+        This one-way nature (easy forward, impossible backward) is what makes public-key cryptography possible.
+        Your <strong>private key</strong> is n. Your <strong>public key</strong> is nP. Everyone can see nP, but nobody can find n.
+      </div>
+    `
+  },
+  {
+    title: "ECDH Key Exchange",
+    subtitle: "Sharing secrets over an insecure channel",
+    hint: "Watch Alice and Bob derive a shared secret",
+    setup: () => { state.mode = 'ecdh'; clearAllPoints(); },
+    html: () => `
+      <div class="prose">
+        <strong>Elliptic Curve Diffie-Hellman (ECDH)</strong> lets two people create a shared secret
+        even if an eavesdropper is watching everything they send.
+      </div>
+      <div style="margin-bottom:14px">
+        <button class="btn primary" onclick="runECDH()" id="ecdh-btn">&#9654; Run key exchange</button>
+      </div>
+      <div class="step-list" id="ecdh-steps">
+        <div class="step-item" id="ecdh-s0">
+          <div class="step-num">1</div>
+          <div class="step-text">Agree on a curve and generator point <span class="hl">G</span></div>
+        </div>
+        <div class="step-item" id="ecdh-s1">
+          <div class="step-num">2</div>
+          <div class="step-text"><span class="hl-pink">Alice</span> picks secret <strong>a</strong>, publishes <strong>aG</strong></div>
+        </div>
+        <div class="step-item" id="ecdh-s2">
+          <div class="step-num">3</div>
+          <div class="step-text"><span class="hl-green">Bob</span> picks secret <strong>b</strong>, publishes <strong>bG</strong></div>
+        </div>
+        <div class="step-item" id="ecdh-s3">
+          <div class="step-num">4</div>
+          <div class="step-text">Each side multiplies their secret by the other's public key</div>
+        </div>
+        <div class="step-item" id="ecdh-s4">
+          <div class="step-num">5</div>
+          <div class="step-text">Both arrive at <span class="hl-gold">abG</span> &mdash; the same shared secret!</div>
+        </div>
+      </div>
+      <div id="ecdh-cards"></div>
+      <div class="callout" style="margin-top:14px">
+        <strong>Why can't Eve crack it?</strong> She sees G, aG, and bG. To find the shared secret abG,
+        she'd need to solve the ECDLP to recover a or b. As we saw, that's infeasible.
+        This is called the <strong>Computational Diffie-Hellman Problem</strong> on elliptic curves.
+      </div>
+    `
+  },
+  {
+    title: "Finite Fields",
+    subtitle: "How real ECC actually works",
+    hint: "Change the prime p to see how the point set changes",
+    setup: () => { state.mode = 'finite'; clearAllPoints(); },
+    html: () => `
+      <div class="prose">
+        Everything so far used <strong>real numbers</strong>. But computers can't do exact real arithmetic.
+        Real ECC works over <strong>finite fields</strong> &mdash; integers modulo a prime p.
+      </div>
+      <div class="math-block">y&sup2; &equiv; x&sup3; + ax + b &nbsp;(mod p)</div>
+      <div class="prose">
+        Instead of a smooth curve, the points form a <strong>scattered cloud</strong> of dots.
+        But the addition rules are <em>exactly the same</em> &mdash; just with modular arithmetic.
+      </div>
+      <div class="control-group">
+        <div class="cg-title">Finite field parameters</div>
+        <div class="slider-row">
+          <label>p</label>
+          <input type="range" id="sl-p" min="5" max="97" step="1" value="${state.prime}" oninput="setPrime(this.value)">
+          <span class="s-val" id="v-p">${state.prime}</span>
+        </div>
+      </div>
+      <canvas id="ff-canvas"></canvas>
+      <div id="ff-info" class="point-card" style="justify-content:center">
+        <span class="pt-coord" id="ff-count">...</span>
+      </div>
+      <div class="callout key">
+        <strong>Real-world curve (secp256k1, used in Bitcoin):</strong><br>
+        p = 2<sup>256</sup> - 2<sup>32</sup> - 977<br>
+        That's a 78-digit prime. The curve has ~2<sup>256</sup> points.<br>
+        a = 0, b = 7, so: y&sup2; = x&sup3; + 7
+      </div>
+      <div class="prose">
+        The scattered, unpredictable pattern of these points is exactly <em>why</em> the discrete log problem is hard.
+        There's no geometric shortcut &mdash; the points don't "line up" in any exploitable way.
+      </div>
+    `
+  },
+  {
+    title: "Summary",
+    subtitle: "Putting it all together",
+    hint: "",
+    setup: () => { state.mode = 'explore'; clearAllPoints(); },
+    html: () => `
+      <div class="prose">
+        You've now seen every building block of Elliptic Curve Cryptography:
+      </div>
+      <div class="step-list">
+        <div class="step-item done"><div class="step-num">1</div>
+          <div class="step-text"><strong>Elliptic curves</strong> are smooth, symmetric curves defined by y&sup2; = x&sup3; + ax + b</div></div>
+        <div class="step-item done"><div class="step-num">2</div>
+          <div class="step-text"><strong>Point addition</strong> uses line-and-reflect to add points on the curve (forms a group)</div></div>
+        <div class="step-item done"><div class="step-num">3</div>
+          <div class="step-text"><strong>Point doubling</strong> uses the tangent line (special case of addition)</div></div>
+        <div class="step-item done"><div class="step-num">4</div>
+          <div class="step-text"><strong>Scalar multiplication</strong> (nP) is fast via double-and-add (~log n steps)</div></div>
+        <div class="step-item done"><div class="step-num">5</div>
+          <div class="step-text"><strong>ECDLP</strong> (finding n from P and nP) is computationally infeasible &mdash; the trapdoor</div></div>
+        <div class="step-item done"><div class="step-num">6</div>
+          <div class="step-text"><strong>ECDH</strong> uses the trapdoor for secure key exchange</div></div>
+        <div class="step-item done"><div class="step-num">7</div>
+          <div class="step-text"><strong>Finite fields</strong> make it work on computers with exact integer arithmetic</div></div>
+      </div>
+      <div class="callout key" style="margin-top:20px">
+        <strong>Why ECC over RSA?</strong> A 256-bit ECC key provides equivalent security to a 3072-bit RSA key.
+        Smaller keys mean faster operations, less bandwidth, and less storage &mdash;
+        which is why ECC dominates in TLS, SSH, cryptocurrency, and mobile.
+      </div>
+      <div class="prose">
+        ECC also enables <strong>ECDSA</strong> (digital signatures), <strong>EdDSA</strong> (Ed25519),
+        and is the basis for modern protocols like Signal's X3DH.
+      </div>
+      <div class="prose" style="color:var(--accent); margin-top:20px">
+        Go back to any chapter to keep exploring. The curve is interactive on every page.
+      </div>
+    `
+  }
+];
+
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+const state = {
+  a: -1, b: 1,
+  chapter: 0,
+  mode: 'explore', // explore, add, double, scalar, trapdoor, ecdh, finite
+  P: null, Q: null, R: null,
+  scalarN: 5,
+  scalarBase: null,
+  scalarPoints: [],
+  animating: false,
+  animStep: -1,
+  trapdoorSecret: 0,
+  trapdoorTarget: null,
+  prime: 23,
+  hover: null, // {x,y} math coords under cursor
+  hoverSnap: null, // snapped to curve
+  dragPoint: null, // 'P' or 'Q' if dragging
+  construction: { line: null, unreflected: null }, // visualization lines
+  ecdhState: null,
+};
+
+// ═══════════════════════════════════════
+//  CANVAS
+// ═══════════════════════════════════════
+const cvs = document.getElementById('main');
+const c = cvs.getContext('2d');
+let W, H, ox, oy, sc; // width, height, origin x/y, scale
+
+function resize() {
+  const dpr = devicePixelRatio || 1;
+  W = cvs.clientWidth; H = cvs.clientHeight;
+  cvs.width = W * dpr; cvs.height = H * dpr;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ox = W / 2; oy = H / 2;
+  sc = Math.min(W, H) / 14;
+  draw();
+}
+addEventListener('resize', resize);
+
+function toScreen(x, y) { return [ox + x * sc, oy - y * sc]; }
+function toMath(sx, sy) { return [(sx - ox) / sc, -(sy - oy) / sc]; }
+
+// ═══════════════════════════════════════
+//  ELLIPTIC CURVE MATH
+// ═══════════════════════════════════════
+function curveY2(x) { return x * x * x + state.a * x + state.b; }
+function curveY(x) { const v = curveY2(x); return v >= 0 ? Math.sqrt(v) : null; }
+
+function snapToCurve(mx, my) {
+  let best = null, bd = Infinity;
+  for (let x = -7; x <= 7; x += 0.008) {
+    const y = curveY(x);
+    if (y === null) continue;
+    for (const sy of [y, -y]) {
+      const d = (x - mx) ** 2 + (sy - my) ** 2;
+      if (d < bd) { bd = d; best = { x, y: sy }; }
+    }
+  }
+  return bd < 0.6 ? best : null;
+}
+
+function ecAdd(P, Q) {
+  if (!P || !Q) return null;
+  if (Math.abs(P.x - Q.x) < 1e-10 && Math.abs(P.y + Q.y) < 1e-10) return null; // inverse
+  let m;
+  if (Math.abs(P.x - Q.x) < 1e-10 && Math.abs(P.y - Q.y) < 1e-10) {
+    if (Math.abs(P.y) < 1e-10) return null;
+    m = (3 * P.x * P.x + state.a) / (2 * P.y);
+  } else {
+    m = (Q.y - P.y) / (Q.x - P.x);
+  }
+  const xr = m * m - P.x - Q.x;
+  const yr = m * (P.x - xr) - P.y;
+  return { x: xr, y: yr, _m: m };
+}
+
+function ecMul(n, P) {
+  let R = { x: P.x, y: P.y }, steps = [{ x: P.x, y: P.y }];
+  for (let i = 1; i < n; i++) {
+    const s = ecAdd(R, P);
+    if (!s) break;
+    R = s; steps.push({ x: R.x, y: R.y });
+  }
+  return { point: R, steps };
+}
+
+// ═══════════════════════════════════════
+//  DRAWING
+// ═══════════════════════════════════════
+function draw() {
+  c.clearRect(0, 0, W, H);
+  drawGrid();
+  drawCurve();
+  drawConstruction();
+  drawScalarPath();
+  drawECDHPoints();
+  drawPoints();
+  drawHover();
+}
+
+function drawGrid() {
+  // Minor grid
+  c.strokeStyle = '#0f0f1e';
+  c.lineWidth = 1;
+  for (let i = -20; i <= 20; i++) {
+    c.beginPath(); c.moveTo(ox + i * sc, 0); c.lineTo(ox + i * sc, H); c.stroke();
+    c.beginPath(); c.moveTo(0, oy + i * sc); c.lineTo(W, oy + i * sc); c.stroke();
+  }
+  // Axes
+  c.strokeStyle = '#1a1a35';
+  c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(0, oy); c.lineTo(W, oy); c.stroke();
+  c.beginPath(); c.moveTo(ox, 0); c.lineTo(ox, H); c.stroke();
+  // Axis labels
+  c.font = '10px Inter'; c.fillStyle = '#333350';
+  for (let i = -8; i <= 8; i++) {
+    if (i === 0) continue;
+    c.fillText(i, ox + i * sc - 3, oy + 14);
+    c.fillText(i, ox + 6, oy - i * sc + 4);
+  }
+}
+
+function drawCurve() {
+  c.lineWidth = 2.5;
+  c.shadowColor = '#6c9fff';
+  c.shadowBlur = 12;
+  c.strokeStyle = '#6c9fff';
+
+  for (const sign of [1, -1]) {
+    c.beginPath();
+    let pen = false;
+    for (let x = -8; x <= 8; x += 0.015) {
+      const y = curveY(x);
+      if (y === null) { pen = false; continue; }
+      const [sx, sy] = toScreen(x, sign * y);
+      if (!pen) { c.moveTo(sx, sy); pen = true; } else c.lineTo(sx, sy);
+    }
+    c.stroke();
+  }
+  c.shadowBlur = 0;
+}
+
+function drawConstruction() {
+  const { line, unreflected } = state.construction;
+  if (!line) return;
+
+  // Extended line
+  const [x1, y1] = line;
+  c.beginPath();
+  c.strokeStyle = '#ffffff18';
+  c.lineWidth = 1;
+  const lx = 40;
+  c.moveTo(...toScreen(x1 - lx, y1 - lx * line[2]));
+  c.lineTo(...toScreen(x1 + lx, y1 + lx * line[2]));
+  c.stroke();
+
+  // Unreflected point
+  if (unreflected && state.R) {
+    const [ux, uy] = toScreen(unreflected.x, unreflected.y);
+    c.beginPath();
+    c.arc(ux, uy, 5, 0, Math.PI * 2);
+    c.fillStyle = '#fbbf2444';
+    c.fill();
+
+    // Vertical dashed line
+    const [rx, ry] = toScreen(state.R.x, state.R.y);
+    c.beginPath();
+    c.setLineDash([4, 4]);
+    c.strokeStyle = '#fbbf2466';
+    c.lineWidth = 1;
+    c.moveTo(ux, uy); c.lineTo(rx, ry);
+    c.stroke();
+    c.setLineDash([]);
+  }
+}
+
+function drawPoint(pt, color, label, r = 8) {
+  const [sx, sy] = toScreen(pt.x, pt.y);
+
+  // Glow
+  c.beginPath();
+  c.arc(sx, sy, r + 6, 0, Math.PI * 2);
+  const grad = c.createRadialGradient(sx, sy, 0, sx, sy, r + 6);
+  grad.addColorStop(0, color + '44');
+  grad.addColorStop(1, color + '00');
+  c.fillStyle = grad;
+  c.fill();
+
+  // Point
+  c.beginPath();
+  c.arc(sx, sy, r, 0, Math.PI * 2);
+  c.fillStyle = color;
+  c.shadowColor = color;
+  c.shadowBlur = 15;
+  c.fill();
+  c.shadowBlur = 0;
+  c.strokeStyle = '#ffffff44';
+  c.lineWidth = 1.5;
+  c.stroke();
+
+  // Label
+  if (label) {
+    c.font = 'bold 14px JetBrains Mono';
+    c.fillStyle = color;
+    c.fillText(label, sx + r + 6, sy - r - 2);
+  }
+}
+
+function drawPoints() {
+  // In ECDH mode, points are drawn by drawECDHPoints instead
+  if (state.mode === 'ecdh') return;
+  if (state.P) drawPoint(state.P, '#ff6b9d', 'P');
+  if (state.Q && state.mode !== 'double') drawPoint(state.Q, '#4ade80', 'Q');
+  if (state.R) drawPoint(state.R, '#fbbf24', state.mode === 'double' ? '2P' : 'R');
+}
+
+function drawScalarPath() {
+  const pts = state.scalarPoints;
+  if (pts.length < 2) return;
+
+  const limit = state.animating ? state.animStep + 1 : pts.length;
+  const n = Math.min(limit, pts.length);
+
+  // Draw connecting arrows
+  for (let i = 0; i < n - 1; i++) {
+    const [x1, y1] = toScreen(pts[i].x, pts[i].y);
+    const [x2, y2] = toScreen(pts[i + 1].x, pts[i + 1].y);
+    const hue = 210 + i * 12;
+    c.beginPath();
+    c.strokeStyle = `hsla(${hue}, 80%, 60%, 0.25)`;
+    c.lineWidth = 1.5;
+    c.setLineDash([5, 4]);
+    c.moveTo(x1, y1); c.lineTo(x2, y2);
+    c.stroke();
+    c.setLineDash([]);
+  }
+
+  // Draw points
+  for (let i = 0; i < n; i++) {
+    const hue = 210 + i * 12;
+    const color = `hsl(${hue}, 80%, 65%)`;
+    drawPoint(pts[i], i === 0 ? '#ff6b9d' : color, `${i + 1}P`, i === 0 ? 8 : 6);
+  }
+}
+
+function drawECDHPoints() {
+  const es = state.ecdhState;
+  if (!es) return;
+  // Draw in order so the most important point is on top
+  if (es.G) drawPoint(es.G, '#6c9fff', 'G', 7);
+  if (es.alicePub) drawPoint(es.alicePub, '#ff6b9d', 'aG', 8);
+  if (es.bobPub) drawPoint(es.bobPub, '#4ade80', 'bG', 8);
+  if (es.shared) drawPoint(es.shared, '#fbbf24', 'abG', 10);
+
+  // Draw dashed lines connecting G to public keys if both exist
+  if (es.G && es.alicePub && es.bobPub) {
+    for (const [pub, color] of [[es.alicePub, '#ff6b9d33'], [es.bobPub, '#4ade8033']]) {
+      const [gx, gy] = toScreen(es.G.x, es.G.y);
+      const [px, py] = toScreen(pub.x, pub.y);
+      c.beginPath();
+      c.setLineDash([4, 4]);
+      c.strokeStyle = color;
+      c.lineWidth = 1;
+      c.moveTo(gx, gy); c.lineTo(px, py);
+      c.stroke();
+      c.setLineDash([]);
+    }
+  }
+}
+
+function drawHover() {
+  if (!state.hoverSnap || state.animating) return;
+  const [sx, sy] = toScreen(state.hoverSnap.x, state.hoverSnap.y);
+  c.beginPath();
+  c.arc(sx, sy, 6, 0, Math.PI * 2);
+  c.strokeStyle = '#ffffff55';
+  c.lineWidth = 1.5;
+  c.setLineDash([3, 3]);
+  c.stroke();
+  c.setLineDash([]);
+}
+
+// ═══════════════════════════════════════
+//  INTERACTION
+// ═══════════════════════════════════════
+const tooltip = document.getElementById('tooltip');
+
+cvs.addEventListener('mousemove', (e) => {
+  const rect = cvs.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const [mx, my] = toMath(sx, sy);
+
+  state.hover = { x: mx, y: my };
+  state.hoverSnap = snapToCurve(mx, my);
+
+  if (state.hoverSnap) {
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX - rect.left + 16) + 'px';
+    tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+    tooltip.textContent = `(${state.hoverSnap.x.toFixed(2)}, ${state.hoverSnap.y.toFixed(2)})`;
+    cvs.style.cursor = 'pointer';
+  } else {
+    tooltip.style.display = 'none';
+    cvs.style.cursor = 'crosshair';
+  }
+  draw();
+});
+
+cvs.addEventListener('mouseleave', () => {
+  state.hoverSnap = null;
+  tooltip.style.display = 'none';
+  draw();
+});
+
+cvs.addEventListener('click', (e) => {
+  if (state.animating) return;
+  const rect = cvs.getBoundingClientRect();
+  const [mx, my] = toMath(e.clientX - rect.left, e.clientY - rect.top);
+  const snap = snapToCurve(mx, my);
+  if (!snap) return;
+
+  if (state.mode === 'add') {
+    if (!state.P) {
+      state.P = snap;
+    } else if (!state.Q) {
+      state.Q = snap;
+      computeAddition();
+    } else {
+      clearAllPoints();
+      state.P = snap;
+    }
+    renderChapter();
+  } else if (state.mode === 'double') {
+    clearAllPoints();
+    state.P = snap;
+    const R = ecAdd(snap, snap);
+    if (R) {
+      state.R = R;
+      state.construction = buildConstruction(snap, snap, R);
+    }
+    renderChapter();
+  } else if (state.mode === 'scalar') {
+    state.scalarBase = snap;
+    state.P = snap;
+    setScalarN(state.scalarN);
+  } else if (state.mode === 'trapdoor') {
+    // No clicking in trapdoor mode
+  }
+  draw();
+});
+
+function computeAddition() {
+  const R = ecAdd(state.P, state.Q);
+  if (R) {
+    state.R = R;
+    state.construction = buildConstruction(state.P, state.Q, R);
+  }
+}
+
+function buildConstruction(P, Q, R) {
+  const m = R._m !== undefined ? R._m : (Q.y - P.y) / (Q.x - P.x);
+  return {
+    line: [P.x, P.y, m],
+    unreflected: { x: R.x, y: -R.y }
+  };
+}
+
+// ═══════════════════════════════════════
+//  CHAPTER-SPECIFIC LOGIC
+// ═══════════════════════════════════════
+function setA(v) {
+  state.a = parseFloat(v);
+  document.getElementById('v-a').textContent = state.a.toFixed(1);
+  updateEquation();
+  const d = 4 * state.a ** 3 + 27 * state.b ** 2;
+  const dv = document.getElementById('disc-val');
+  const ds = document.getElementById('disc-status');
+  if (dv) {
+    dv.textContent = d.toFixed(2);
+    const ok = Math.abs(d) > 0.01;
+    ds.innerHTML = ok ? 'Curve is non-singular &#10003;' : '<span style="color:var(--pink)">SINGULAR &mdash; not valid for crypto!</span>';
+    document.getElementById('disc-box').style.borderColor = ok ? 'var(--accent)' : 'var(--pink)';
+  }
+  clearAllPoints();
+  draw();
+}
+
+function setB(v) {
+  state.b = parseFloat(v);
+  document.getElementById('v-b').textContent = state.b.toFixed(1);
+  updateEquation();
+  setA(state.a); // recalc discriminant
+}
+
+function updateEquation() {
+  const ea = state.a >= 0 ? `+ ${state.a.toFixed(1)}x` : `- ${Math.abs(state.a).toFixed(1)}x`;
+  const eb = state.b >= 0 ? `+ ${state.b.toFixed(1)}` : `- ${Math.abs(state.b).toFixed(1)}`;
+  document.getElementById('eq-display').textContent = `y² = x³ ${ea} ${eb}`;
+}
+
+function autoPickBase() {
+  for (let x = 0; x <= 5; x += 0.05) {
+    const y = curveY(x);
+    if (y !== null && y > 0.4) {
+      state.scalarBase = { x: +x.toFixed(3), y: +y.toFixed(4) };
+      state.P = state.scalarBase;
+      return;
+    }
+  }
+}
+
+function setScalarN(v) {
+  state.scalarN = parseInt(v);
+  const el = document.getElementById('v-n');
+  if (el) el.textContent = state.scalarN;
+
+  if (!state.scalarBase) autoPickBase();
+  const { steps } = ecMul(state.scalarN, state.scalarBase);
+  state.scalarPoints = steps;
+
+  const box = document.getElementById('scalar-path');
+  if (box) {
+    box.innerHTML = steps.map((p, i) => `
+      <div class="point-card" style="padding:6px 12px;margin:3px 0">
+        <div class="dot" style="background:${i === 0 ? '#ff6b9d' : `hsl(${210 + i * 12},80%,65%)`}"></div>
+        <span class="pt-label">${i + 1}P</span>
+        <span class="pt-coord">(${p.x.toFixed(3)}, ${p.y.toFixed(3)})</span>
+      </div>
+    `).join('');
+  }
+  draw();
+}
+
+function animateScalar() {
+  if (!state.scalarBase) autoPickBase();
+  const { steps } = ecMul(state.scalarN, state.scalarBase);
+  state.scalarPoints = steps;
+  state.animating = true;
+  state.animStep = 0;
+
+  function tick() {
+    draw();
+    if (state.animStep < steps.length - 1) {
+      state.animStep++;
+      setTimeout(tick, 350);
+    } else {
+      state.animating = false;
+      draw();
+    }
+  }
+  tick();
+}
+
+// Trapdoor challenge
+function setupTrapdoor() {
+  autoPickBase();
+  state.trapdoorSecret = Math.floor(Math.random() * 20) + 3;
+  const { point } = ecMul(state.trapdoorSecret, state.scalarBase);
+  state.trapdoorTarget = point;
+  state.P = state.scalarBase;
+  state.R = point;
+  draw();
+}
+
+function updateGuess(v) {
+  const n = parseInt(v);
+  document.getElementById('v-guess').textContent = n;
+  const { point } = ecMul(n, state.scalarBase);
+  state.Q = point; // show guess as green
+
+  const res = document.getElementById('guess-result');
+  const dist = Math.abs(point.x - state.trapdoorTarget.x) + Math.abs(point.y - state.trapdoorTarget.y);
+  if (dist < 0.1) {
+    res.innerHTML = `<span style="color:var(--green)">&#10003; Correct! n = ${n}. You solved ECDLP... but only because n was tiny.</span>`;
+  } else {
+    res.innerHTML = `<span style="color:var(--text-dim)">n = ${n} &rarr; (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) &mdash; not a match</span>`;
+  }
+  updatePointCards();
+  draw();
+}
+
+// ECDH
+let ecdhAnimTimer = null;
+
+function runECDH() {
+  // Cancel any prior animation
+  if (ecdhAnimTimer) { clearTimeout(ecdhAnimTimer); ecdhAnimTimer = null; }
+
+  // Find generator point
+  let G = null;
+  for (let x = -1; x <= 4; x += 0.05) {
+    const y = curveY(x);
+    if (y !== null && y > 0.5) { G = { x: +x.toFixed(3), y: +y.toFixed(4) }; break; }
+  }
+  if (!G) return;
+
+  // Pick secrets and compute, retry if any scalar mul hits point at infinity
+  let aSecret, bSecret, aPub, bPub, aliceShared, bobShared;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    aSecret = Math.floor(Math.random() * 8) + 2;
+    bSecret = Math.floor(Math.random() * 8) + 2;
+    const aResult = ecMul(aSecret, G);
+    const bResult = ecMul(bSecret, G);
+    if (aResult.steps.length < aSecret || bResult.steps.length < bSecret) continue;
+    aPub = aResult.point;
+    bPub = bResult.point;
+    const asResult = ecMul(aSecret, bPub);
+    const bsResult = ecMul(bSecret, aPub);
+    if (asResult.steps.length < aSecret || bsResult.steps.length < bSecret) continue;
+    aliceShared = asResult.point;
+    bobShared = bsResult.point;
+    break;
+  }
+  if (!aliceShared || !bobShared) return;
+
+  // Clear canvas points but NOT ecdhState (set it after clearing)
+  state.P = null; state.Q = null; state.R = null;
+  state.scalarPoints = [];
+  state.construction = { line: null, unreflected: null };
+  state.animating = true;
+
+  // Initialize ECDH visualization state
+  state.ecdhState = { G, aSecret, bSecret, alicePub: null, bobPub: null, shared: null };
+
+  const steps = document.querySelectorAll('#ecdh-steps .step-item');
+  const cards = document.getElementById('ecdh-cards');
+  if (!steps.length || !cards) return;
+
+  let step = 0;
+
+  // Reset UI
+  steps.forEach(s => { s.classList.remove('active', 'done'); });
+  cards.innerHTML = '';
+  const btn = document.getElementById('ecdh-btn');
+  if (btn) btn.style.display = 'none';
+
+  function next() {
+    // Mark previous step done
+    if (step > 0 && steps[step - 1]) {
+      steps[step - 1].classList.remove('active');
+      steps[step - 1].classList.add('done');
+    }
+
+    // All done
+    if (step >= 5) {
+      state.animating = false;
+      if (btn) btn.style.display = '';
+      return;
+    }
+
+    // Activate current step
+    if (steps[step]) steps[step].classList.add('active');
+
+    if (step === 0) {
+      // Show generator point G on canvas
+      state.ecdhState.G = G;
+      cards.innerHTML = `
+        <div class="point-card" id="ecdh-g-card">
+          <div class="dot" style="background:var(--accent)"></div>
+          <span class="pt-label">G</span>
+          <span class="pt-coord">(${G.x.toFixed(3)}, ${G.y.toFixed(3)})</span>
+        </div>`;
+    }
+    else if (step === 1) {
+      // Alice generates keypair, show her public key on canvas
+      state.ecdhState.alicePub = aPub;
+      cards.innerHTML += `
+        <div class="ecdh-grid" id="ecdh-grid">
+          <div class="party-card alice"><h3>Alice</h3>
+            <div class="party-val">secret <b>a = ${aSecret}</b></div>
+            <div class="party-val">computes ${aSecret} &times; G</div>
+            <div class="party-val">public <b>aG = (${aPub.x.toFixed(2)}, ${aPub.y.toFixed(2)})</b></div>
+          </div>
+          <div class="party-card bob" style="opacity:0.3"><h3>Bob</h3>
+            <div class="party-val">waiting...</div>
+          </div>
+        </div>`;
+    }
+    else if (step === 2) {
+      // Bob generates keypair, show his public key on canvas
+      state.ecdhState.bobPub = bPub;
+      const grid = document.getElementById('ecdh-grid');
+      if (grid) {
+        grid.innerHTML = `
+          <div class="party-card alice"><h3>Alice</h3>
+            <div class="party-val">secret <b>a = ${aSecret}</b></div>
+            <div class="party-val">public <b>aG = (${aPub.x.toFixed(2)}, ${aPub.y.toFixed(2)})</b></div>
+          </div>
+          <div class="party-card bob"><h3>Bob</h3>
+            <div class="party-val">secret <b>b = ${bSecret}</b></div>
+            <div class="party-val">computes ${bSecret} &times; G</div>
+            <div class="party-val">public <b>bG = (${bPub.x.toFixed(2)}, ${bPub.y.toFixed(2)})</b></div>
+          </div>`;
+      }
+    }
+    else if (step === 3) {
+      // Both sides compute the shared secret independently
+      cards.innerHTML += `
+        <div class="ecdh-grid" style="margin-top:10px">
+          <div class="party-card alice" style="border-color:#ff6b9d55">
+            <h3 style="color:var(--pink);font-size:11px">Alice computes</h3>
+            <div class="party-val">a &times; bG = ${aSecret} &times; (${bPub.x.toFixed(2)}, ${bPub.y.toFixed(2)})</div>
+            <div class="party-val"><b>= (${aliceShared.x.toFixed(3)}, ${aliceShared.y.toFixed(3)})</b></div>
+          </div>
+          <div class="party-card bob" style="border-color:#4ade8055">
+            <h3 style="color:var(--green);font-size:11px">Bob computes</h3>
+            <div class="party-val">b &times; aG = ${bSecret} &times; (${aPub.x.toFixed(2)}, ${aPub.y.toFixed(2)})</div>
+            <div class="party-val"><b>= (${bobShared.x.toFixed(3)}, ${bobShared.y.toFixed(3)})</b></div>
+          </div>
+        </div>`;
+    }
+    else if (step === 4) {
+      // Reveal the shared secret on canvas
+      state.ecdhState.shared = aliceShared;
+      const match = Math.abs(aliceShared.x - bobShared.x) < 0.001 && Math.abs(aliceShared.y - bobShared.y) < 0.001;
+      cards.innerHTML += `
+        <div class="shared-card">
+          <div class="sc-label">Shared Secret (abG)</div>
+          <div class="sc-val">(${aliceShared.x.toFixed(3)}, ${aliceShared.y.toFixed(3)})</div>
+          <div style="font-size:11px;color:${match ? 'var(--green)' : 'var(--pink)'};margin-top:8px">
+            ${match ? '&#10003; Both sides computed the same point!' : '&#10007; Mismatch (floating point error)'}
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px">
+            An eavesdropper sees G, aG, bG<br>
+            but cannot compute abG without knowing a or b
+          </div>
+        </div>`;
+    }
+
+    draw();
+    step++;
+    ecdhAnimTimer = setTimeout(next, 1400);
+  }
+  next();
+}
+
+// Finite field
+function setPrime(v) {
+  let p = parseInt(v);
+  while (!isPrime(p) && p < 200) p++;
+  state.prime = p;
+  document.getElementById('v-p').textContent = p;
+  drawFiniteField();
+}
+
+function isPrime(n) {
+  if (n < 2) return false;
+  for (let i = 2; i * i <= n; i++) if (n % i === 0) return false;
+  return true;
+}
+
+function drawFiniteField() {
+  const fc = document.getElementById('ff-canvas');
+  if (!fc) return;
+  const fctx = fc.getContext('2d');
+  const dpr = devicePixelRatio || 1;
+  fc.width = fc.clientWidth * dpr;
+  fc.height = fc.clientHeight * dpr;
+  fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const fw = fc.clientWidth, fh = fc.clientHeight;
+  const p = state.prime;
+  const aI = Math.round(state.a), bI = Math.round(state.b);
+
+  fctx.clearRect(0, 0, fw, fh);
+
+  const pad = 25;
+  const cellW = (fw - pad * 2) / p;
+  const cellH = (fh - pad * 2) / p;
+
+  // Grid dots
+  fctx.fillStyle = '#111125';
+  for (let x = 0; x < p; x++) {
+    for (let y = 0; y < p; y++) {
+      fctx.beginPath();
+      fctx.arc(pad + x * cellW + cellW / 2, fh - pad - y * cellH - cellH / 2, 1, 0, Math.PI * 2);
+      fctx.fill();
+    }
+  }
+
+  // Points
+  let count = 0;
+  for (let x = 0; x < p; x++) {
+    const rhs = (((x * x * x + aI * x + bI) % p) + p * 1000) % p;
+    for (let y = 0; y < p; y++) {
+      if ((y * y) % p === rhs) {
+        count++;
+        const sx = pad + x * cellW + cellW / 2;
+        const sy = fh - pad - y * cellH - cellH / 2;
+        const hue = (x * 23 + y * 41) % 360;
+        const r = Math.min(cellW, cellH) * 0.38;
+
+        fctx.beginPath();
+        fctx.arc(sx, sy, r, 0, Math.PI * 2);
+        fctx.fillStyle = `hsl(${hue}, 70%, 55%)`;
+        fctx.shadowColor = `hsl(${hue}, 70%, 55%)`;
+        fctx.shadowBlur = 6;
+        fctx.fill();
+        fctx.shadowBlur = 0;
+      }
+    }
+  }
+
+  // Axis labels
+  fctx.font = `${Math.min(9, cellW)}px JetBrains Mono`;
+  fctx.fillStyle = '#333350';
+  const step = p > 40 ? Math.ceil(p / 10) : (p > 20 ? 5 : 1);
+  for (let i = 0; i < p; i += step) {
+    fctx.fillText(i, pad + i * cellW + cellW / 2 - 3, fh - pad + 13);
+    fctx.fillText(i, 2, fh - pad - i * cellH - cellH / 2 + 3);
+  }
+
+  const el = document.getElementById('ff-count');
+  if (el) el.textContent = `${count} points + O (point at infinity) over F_${p}`;
+}
+
+// ═══════════════════════════════════════
+//  CHAPTER NAVIGATION
+// ═══════════════════════════════════════
+const navEl = document.getElementById('chapter-nav');
+const bodyEl = document.getElementById('panel-body');
+const visited = new Set([0]);
+
+function buildNav() {
+  navEl.innerHTML = chapters.map((ch, i) =>
+    `<div class="chapter-dot ${i === state.chapter ? 'active' : visited.has(i) ? 'visited' : ''}"
+          onclick="goChapter(${i})" title="${ch.title}">${i + 1}</div>`
+  ).join('');
+}
+
+function goChapter(i) {
+  state.chapter = i;
+  visited.add(i);
+  buildNav();
+  renderChapter();
+  chapters[i].setup();
+  document.getElementById('progress').style.width = ((i + 1) / chapters.length * 100) + '%';
+  document.getElementById('canvas-hint').textContent = chapters[i].hint;
+  document.getElementById('canvas-hint').style.opacity = chapters[i].hint ? 1 : 0;
+  updateEquation();
+  draw();
+  if (i === 6) setTimeout(drawFiniteField, 50); // finite field tab
+}
+
+function renderChapter() {
+  const ch = chapters[state.chapter];
+  bodyEl.innerHTML = `
+    <div class="chapter active">
+      <h2>${ch.title}</h2>
+      <div class="ch-subtitle">${ch.subtitle}</div>
+      ${ch.html()}
+      <div class="nav-row">
+        ${state.chapter > 0 ? `<button class="btn" onclick="goChapter(${state.chapter - 1})">&larr; Back</button>` : '<div></div>'}
+        ${state.chapter < chapters.length - 1 ? `<button class="btn primary" onclick="goChapter(${state.chapter + 1})">Next &rarr;</button>` : '<div></div>'}
+      </div>
+    </div>`;
+  bodyEl.scrollTop = 0;
+  updatePointCards();
+}
+
+function updatePointCards() {
+  const el = document.getElementById('point-cards');
+  if (!el) return;
+  let html = '';
+  if (state.P) html += `<div class="point-card"><div class="dot" style="background:#ff6b9d"></div><span class="pt-label">P</span><span class="pt-coord">(${state.P.x.toFixed(3)}, ${state.P.y.toFixed(3)})</span></div>`;
+  if (state.Q && state.mode !== 'double') html += `<div class="point-card"><div class="dot" style="background:#4ade80"></div><span class="pt-label">Q</span><span class="pt-coord">(${state.Q.x.toFixed(3)}, ${state.Q.y.toFixed(3)})</span></div>`;
+  if (state.R) {
+    const lbl = state.mode === 'double' ? '2P' : (state.mode === 'trapdoor' ? 'nP' : 'R');
+    html += `<div class="point-card"><div class="dot" style="background:#fbbf24"></div><span class="pt-label">${lbl}</span><span class="pt-coord">(${state.R.x.toFixed(3)}, ${state.R.y.toFixed(3)})</span></div>`;
+  }
+  el.innerHTML = html;
+}
+
+function clearAllPoints() {
+  state.P = null; state.Q = null; state.R = null;
+  state.scalarPoints = [];
+  state.construction = { line: null, unreflected: null };
+  state.ecdhState = null;
+  state.animating = false;
+  if (ecdhAnimTimer) { clearTimeout(ecdhAnimTimer); ecdhAnimTimer = null; }
+}
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+resize();
+buildNav();
+goChapter(0);
+</script>
+</body>
+</html>
